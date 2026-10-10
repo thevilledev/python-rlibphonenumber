@@ -1,0 +1,28 @@
+[package]
+name = "rphonenumbers"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Drop-in replacement for the Python phonenumbers package, backed by rlibphonenumber"
+license = "Apache-2.0"
+repository = "https://github.com/thevilledev/python-rlibphonenumber"
+readme = "README.md"
+publish = false
+# Kept out of the Python sdist, which maturin builds from `cargo package`.
+exclude = [".github/"]
+
+[lib]
+name = "_rphonenumbers"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.29", features = ["abi3-py310"] }
+rlibphonenumber = "=2.2.14"
+# Same engine rlibphonenumber uses, to validate user-supplied patterns.
+regex = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

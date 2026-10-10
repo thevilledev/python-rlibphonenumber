@@ -1,0 +1,22 @@
+rphonenumbers
+Copyright 2026 Ville Vesilehto
+
+This product includes software developed by third parties:
+
+rlibphonenumber (https://github.com/vloldik/rlibphonenumber)
+  Copyright (C) 2025 Kashin Vladislav
+  Licensed under the Apache License, Version 2.0.
+  Linked into the native extension; provides all parsing, formatting and
+  validation logic.
+
+libphonenumber (https://github.com/google/libphonenumber)
+  Copyright (C) 2009 The Libphonenumber Authors
+  Licensed under the Apache License, Version 2.0.
+  Phone number metadata and algorithms, bundled via rlibphonenumber.
+
+python-phonenumbers (https://github.com/daviddrysdale/python-phonenumbers)
+  Copyright (C) 2009 The Libphonenumber Authors
+  Copyright (C) 2011 David Drysdale
+  Licensed under the Apache License, Version 2.0.
+  The Python API, data classes and messages of this package mirror
+  python-phonenumbers so that it can be used as a drop-in replacement.

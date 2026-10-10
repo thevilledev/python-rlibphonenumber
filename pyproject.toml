@@ -1,0 +1,65 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "rphonenumbers"
+description = "Drop-in replacement for phonenumbers that runs parsing, formatting and validation on the rlibphonenumber Rust crate"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Ville Vesilehto", email = "ville@vesilehto.fi" }]
+keywords = ["phonenumbers", "libphonenumber", "phone", "telephone", "rust"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Free Threading :: 2 - Beta",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Rust",
+    "Topic :: Communications :: Telephony",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/thevilledev/python-rlibphonenumber"
+Source = "https://github.com/thevilledev/python-rlibphonenumber"
+Issues = "https://github.com/thevilledev/python-rlibphonenumber/issues"
+Changelog = "https://github.com/thevilledev/python-rlibphonenumber/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+# Supplies the APIs rlibphonenumber does not implement: short numbers,
+# AsYouTypeFormatter, PhoneMetadata, and the geocoder, carrier and timezone modules.
+full = ["phonenumbers"]
+test = ["pytest>=8", "phonenumbers==9.0.41"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "rphonenumbers._rphonenumbers"
+features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# %-formatting is kept where it reproduces phonenumbers' output verbatim.
+ignore = ["UP031"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]
