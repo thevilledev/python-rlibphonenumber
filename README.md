@@ -7,7 +7,8 @@
 A drop-in replacement for [`phonenumbers`](https://github.com/daviddrysdale/python-phonenumbers)
 that runs parsing, formatting, validation and number matching on
 [rlibphonenumber](https://github.com/vloldik/rlibphonenumber), a Rust port of Google's
-libphonenumber. Same functions, same signatures, same results, typically 10–70x faster.
+libphonenumber. Same functions, same signatures, same results; parsing and validation run 9–16x
+faster, and mixed-region batches up to 75x faster.
 
 rlibphonenumber does not cover all of `phonenumbers`: short numbers, as-you-type formatting, raw
 metadata and the geocoder, carrier and timezone modules are missing. With the `full` extra,
@@ -60,105 +61,40 @@ install `rphonenumbers[full]` if you use it.
 
 ## Performance
 
-`python benches/bench.py` on an Apple M1 Max, CPython 3.14, `phonenumbers` 9.0.41:
+Speedup over `phonenumbers` 9.0.41 from `python benches/bench.py`, with CPython 3.14.8:
 
-| Operation | phonenumbers | rphonenumbers | Speedup |
-|---|---:|---:|---:|
-| `parse("+1 650-253-0000")` | 9.08 µs | 817 ns | 11.1x |
-| `parse("020 8366 1177", "GB")` | 11.65 µs | 822 ns | 14.2x |
-| `format_number(E164)` | 270 ns | 248 ns | 1.1x |
-| `format_number(INTERNATIONAL)` | 3.97 µs | 680 ns | 5.8x |
-| `is_valid_number` | 8.98 µs | 511 ns | 17.6x |
-| `number_type` | 8.75 µs | 507 ns | 17.3x |
-| parse + validate + E164, 489 numbers across all regions | 69.7 ms | 998 µs | 69.8x |
-| `PhoneNumberMatcher`, 944 chars | 953 µs | 79 µs | 12.1x |
+| Operation | Apple M1 Max | AMD Ryzen AI 9 HX PRO 370 |
+|---|---:|---:|
+| `parse("+1 650-253-0000")` | 10.3x | 9.0x |
+| `parse("020 8366 1177", "GB")` | 13.1x | 11.5x |
+| `format_number(E164)` | 1.1x | 1.1x |
+| `format_number(INTERNATIONAL)` | 5.5x | 5.1x |
+| `is_valid_number` | 16.4x | 14.6x |
+| `number_type` | 15.9x | 13.9x |
+| parse + validate + E164, 489 numbers across all regions | 63.1x | 75.2x |
+| `PhoneNumberMatcher`, 944 chars | 11.2x | 13.1x |
 
 E164 formatting is already a string concatenation in `phonenumbers`, so there is nothing to win
-there. The mixed-region batch gains the most because `phonenumbers` recompiles regexes once
-Python's `re` cache (512 entries) overflows.
+there. See [Performance](https://github.com/thevilledev/python-rlibphonenumber/blob/main/docs/performance.md)
+for the timings and how they were measured.
 
 ## Compatibility
 
-Implemented in Rust:
+`phonenumbers.phonenumberutil`'s public API, the `PhoneNumber` data classes and
+`PhoneNumberMatcher` run in Rust. The short-number API, `AsYouTypeFormatter`, `PhoneMetadata` and
+the geocoder, carrier and timezone modules come from `phonenumbers` when it is installed
+(`rphonenumbers[full]`), at `phonenumbers`' own speed.
 
-- Everything in `phonenumbers.phonenumberutil`'s public API: `parse`, all `format_*` functions,
-  validation, number types, matching, example numbers, region and calling-code queries,
-  `COUNTRY_CODE_TO_REGION_CODE`, `SUPPORTED_REGIONS`, and so on.
-- `PhoneNumber`, `FrozenPhoneNumber`, `CountryCodeSource`, `NumberFormat` and `PhoneNumberDesc`.
-- `PhoneNumberMatcher`, `PhoneNumberMatch` and `Leniency`.
-
-The functions accept any object with `PhoneNumber`'s attributes, including upstream
-`phonenumbers.PhoneNumber` instances.
-
-Taken from `phonenumbers` when it is installed (`rphonenumbers[full]`), because the
-rlibphonenumber crate does not provide them:
-
-- The short-number API (`is_valid_short_number`, `expected_cost`, `is_emergency_number`, ...).
-- `AsYouTypeFormatter` and `PhoneMetadata`.
-- The `geocoder`, `carrier` and `timezone` modules.
-
-These run `phonenumbers`' own Python code and data, so they are no faster than in `phonenumbers`,
-and they accept rphonenumbers' `PhoneNumber` objects. `phonenumbers` is loaded as a private copy
-on first use, so this also works after `install()`. Without it, using these raises
-`AttributeError` or `ImportError` explaining what to install.
-
-A [differential test suite](https://github.com/thevilledev/python-rlibphonenumber/blob/main/tests/differential.py)
-checks every public function against `phonenumbers`: about 6.7 million comparisons over the example
-numbers of every region in many textual variants (national, international, IDD-prefixed, with
-extensions, truncated, padded, shuffled), hand-written edge cases (RFC 3966 URIs, alpha numbers,
-full-width and Arabic-Indic digits, invalid regions, oversized input), and every region and
-calling code. Results, raised exception types and `NumberParseException` messages must all be
-identical.
-
-### Known differences
-
-- `example_number(None)` returns a valid fixed-line example, but not necessarily the one
-  `phonenumbers` picks: upstream returns the first hit while iterating a `set`, so its answer
-  depends on `PYTHONHASHSEED`.
-- `format_out_of_country_keeping_alpha_chars(numobj, None)` returns the international format;
-  `phonenumbers` raises `AttributeError` when the number has `raw_input`.
-- `PhoneNumberMatcher` scans the whole text on the first `has_next()` call rather than lazily;
-  the sequence of matches is the same. `min_candidate_length` filters on the matched string.
-- `parse(..., _check_region=False)` (a private parameter) is accepted but ignored.
-- `NumberFormat` patterns passed to `format_by_pattern` run on Rust's `regex` engine, so
-  Python-only syntax such as lookaround is rejected with `re.error`.
-- The APIs taken from `phonenumbers` use the metadata of the installed `phonenumbers` release.
-  When it differs from `rphonenumbers.__phonenumbers_version__`, their results can disagree with
-  the core API on recently changed numbers.
-
-### Upstream fixes
-
-rlibphonenumber 2.2.14 has three bugs that make its results differ from libphonenumber. This
-package corrects them itself until the fixes are released upstream:
-
-- `is_valid_number_for_region` does not check that the number's country code belongs to the
-  region, so `+44 2423232345` is reported valid for `BS`
-  ([vloldik/rlibphonenumber#35](https://github.com/vloldik/rlibphonenumber/pull/35)).
-- `format_by_pattern` renders RFC 3966 extensions in national style (`" ext. 42"`) instead of
-  `";ext=42"` ([vloldik/rlibphonenumber#36](https://github.com/vloldik/rlibphonenumber/pull/36)).
-  rlibphonenumber inherits this from libphonenumber's C++ implementation, fixed there in
-  [google/libphonenumber#4087](https://github.com/google/libphonenumber/pull/4087).
-- `format_out_of_country_keeping_alpha_chars` emits `" 247 40123"` instead of `"+247 40123"`
-  when the calling region has no single or preferred international prefix
-  ([vloldik/rlibphonenumber#37](https://github.com/vloldik/rlibphonenumber/pull/37)).
+A differential test suite compares every public function against `phonenumbers` over about 6.7
+million inputs. [Compatibility](https://github.com/thevilledev/python-rlibphonenumber/blob/main/docs/compatibility.md)
+lists what runs where, the known differences, and the rlibphonenumber bugs this package works
+around.
 
 ## Development
 
-Requires a Rust toolchain (1.88+):
-
-```bash
-pip install maturin
-maturin develop --release
-pip install pytest phonenumbers==9.0.41
-pytest                         # API tests + differential tests against phonenumbers
-python tests/differential.py   # differential summary, per function
-python benches/bench.py
-```
-
-The `phonenumbers` version used for testing must match the libphonenumber metadata release
-bundled in rlibphonenumber (`rphonenumbers.__phonenumbers_version__`).
-
-See [RELEASING.md](https://github.com/thevilledev/python-rlibphonenumber/blob/main/RELEASING.md)
+See [Development](https://github.com/thevilledev/python-rlibphonenumber/blob/main/docs/development.md)
+for building from source and running the tests and benchmarks, and
+[RELEASING.md](https://github.com/thevilledev/python-rlibphonenumber/blob/main/RELEASING.md)
 for how releases are published.
 
 ## License
